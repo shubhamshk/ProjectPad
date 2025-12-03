@@ -227,8 +227,7 @@ const TermsOfService: React.FC = () => {
                         </p>
                         <div className="bg-gray-50 p-6 rounded-lg space-y-2">
                             <p className="font-semibold text-gray-900">ProjectPad AI Support</p>
-                            <p>Email: <a href="mailto:support@projectpad.ai" className="text-blue-600 hover:text-blue-800">support@projectpad.ai</a></p>
-                            <p>For legal inquiries: <a href="mailto:legal@projectpad.ai" className="text-blue-600 hover:text-blue-800">legal@projectpad.ai</a></p>
+                            <p>Email: <a href="mailto:designbyshk@gmail.com" className="text-blue-600 hover:text-blue-800">designbyshk@gmail.com</a></p>
                         </div>
                     </section>
 
