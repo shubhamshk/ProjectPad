@@ -1,0 +1,7 @@
+{
+  "name": "ProjectPad AI",
+  "description": "A high-performance AI workspace for project management and generation, featuring glassmorphism design and streaming AI chat.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
