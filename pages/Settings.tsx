@@ -1,11 +1,14 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GlassCard } from '../components/ui/GlassCard';
-import { User, Shield, Key, Bell, Check, Eye, EyeOff, HelpCircle, X, ExternalLink, Zap } from 'lucide-react';
+import { User, Shield, Key, Bell, Check, Eye, EyeOff, HelpCircle, X, ExternalLink, Zap, FileText } from 'lucide-react';
 import { useStore } from '../store';
 import { AnimatePresence, motion } from 'framer-motion';
+import { AppRoute } from '../types';
 
 export const Settings: React.FC = () => {
+  const navigate = useNavigate();
   const { user, apiKeys, setApiKey } = useStore();
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [activeHelp, setActiveHelp] = useState<'gemini' | 'openai' | 'perplexity' | 'huggingface' | null>(null);
@@ -107,6 +110,27 @@ export const Settings: React.FC = () => {
               badge="FREE"
             />
           </div>
+        </GlassCard>
+
+        {/* Legal & About Section */}
+        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mt-4">Legal & About</h2>
+
+        <GlassCard>
+          <button
+            onClick={() => navigate(AppRoute.TERMS_OF_SERVICE)}
+            className="w-full flex items-center justify-between gap-3 text-white hover:bg-white/5 transition-colors p-2 rounded-lg -m-2"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400">
+                <FileText size={20} />
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold">Terms of Service</h3>
+                <p className="text-sm text-gray-400">View our terms and conditions</p>
+              </div>
+            </div>
+            <ExternalLink size={18} className="text-gray-500" />
+          </button>
         </GlassCard>
       </div>
 
