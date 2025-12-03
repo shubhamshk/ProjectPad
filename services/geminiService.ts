@@ -5,8 +5,7 @@ import { useStore } from '../store';
 
 // Helper to get Gemini Client with dynamic key
 const getGeminiClient = () => {
-  const storeKey = useStore.getState().apiKeys.gemini;
-  const key = storeKey || process.env.API_KEY;
+  const key = useStore.getState().apiKeys.gemini;
 
   if (!key) {
     throw new Error("Gemini API Key missing. Please add it in Settings.");
@@ -263,7 +262,7 @@ const generateHuggingFaceResponse = async (
   modelId: 'mistral-7b' | 'qwen-7b' | 'qwen-14b' | 'llama-3.1-8b' | 'deepseek-r1',
   onChunk: (text: string) => void
 ) => {
-  const apiKey = useStore.getState().apiKeys.huggingface || import.meta.env.VITE_HF_TOKEN;
+  const apiKey = useStore.getState().apiKeys.huggingface;
   if (!apiKey) {
     const msg = "🤗 HuggingFace API Key missing. Please add it in Settings to use free models.";
     onChunk(msg);
@@ -278,55 +277,30 @@ const generateHuggingFaceResponse = async (
   }
 
   try {
-    const systemPrompt = "You are ProjectPad, an expert technical assistant.";
-
-    // Format input based on model type
-    let input: string;
-    if (modelConfig.format === 'instruct') {
-      // Mistral Instruct format
-      const context = history.slice(-5).map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
-      input = `<s>[INST] ${systemPrompt}\n\n${context}\n\nUser: ${prompt} [/INST]`;
-    } else {
-      // Chat format (Qwen, Llama, DeepSeek)
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...history.slice(-5).map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })),
-        { role: 'user', content: prompt }
-      ];
-      input = messages.map(m => `<|${m.role}|>\n${m.content}`).join('\n') + '\n<|assistant|>\n';
-    }
-
-    // Use CORS proxy for browser requests
-    const apiUrl = `https://api-inference.huggingface.co/models/${modelConfig.endpoint}`;
-    const corsProxy = 'https://corsproxy.io/?';
-
-    const response = await fetch(
-      corsProxy + encodeURIComponent(apiUrl),
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inputs: input,
-          parameters: {
-            max_new_tokens: 512,
-            return_full_text: false,
-            temperature: 0.7,
-            top_p: 0.9,
-          },
-          options: {
-            wait_for_model: true,
-            use_cache: false
-          }
-        }),
-      }
-    );
+    // Use HuggingFace Router API (OpenAI-compatible)
+    const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: `${modelConfig.endpoint}:featherless-ai`,
+        messages: [
+          { role: 'system', content: "You are ProjectPad, an expert technical assistant." },
+          ...history.slice(-5).map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })),
+          { role: 'user', content: prompt }
+        ],
+        stream: true,
+        max_tokens: 512,
+        temperature: 0.7,
+        top_p: 0.9
+      })
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
-      const errorMessage = errorData?.error || response.statusText;
+      const errorMessage = errorData?.error?.message || response.statusText;
 
       if (response.status === 503) {
         const msg = `⏳ Model is loading... Please wait 20-30 seconds and try again.\n\nHuggingFace free models need to "wake up" on first use.`;
@@ -341,13 +315,39 @@ const generateHuggingFaceResponse = async (
       throw new Error(`HuggingFace Error (${response.status}): ${errorMessage}`);
     }
 
-    const result = await response.json();
-    const answer = Array.isArray(result) ? result[0]?.generated_text || '' : result.generated_text || '';
+    if (!response.body) throw new Error('No response body');
 
-    // Clean up the output
-    const cleanAnswer = answer.trim();
-    onChunk(cleanAnswer);
-    return cleanAnswer;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.trim() === '') continue;
+        if (line.trim() === 'data: [DONE]') continue;
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            const content = data.choices[0]?.delta?.content;
+            if (content) {
+              fullText += content;
+              onChunk(fullText);
+            }
+          } catch (e) {
+            console.error('Error parsing stream', e);
+          }
+        }
+      }
+    }
+    return fullText;
 
   } catch (error) {
     console.error("HuggingFace Error:", error);

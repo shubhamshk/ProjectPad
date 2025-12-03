@@ -1,83 +1,71 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
 
-const HF_MODELS: Record<string, { endpoint: string; format: 'instruct' | 'chat' }> = {
-    'mistral-7b': { endpoint: 'mistralai/Mistral-7B-Instruct-v0.2', format: 'instruct' },
-    'qwen-7b': { endpoint: 'Qwen/Qwen2.5-7B-Instruct', format: 'chat' },
-    'qwen-14b': { endpoint: 'Qwen/Qwen2.5-14B-Instruct', format: 'chat' },
-    'llama-3.1-8b': { endpoint: 'meta-llama/Meta-Llama-3.1-8B-Instruct', format: 'chat' },
-    'deepseek-r1': { endpoint: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', format: 'chat' }
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 serve(async (req) => {
+    // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
 
     try {
-        const { modelId, input } = await req.json();
+        const { model, inputs, parameters, options } = await req.json();
 
-        if (!modelId || !input) {
-            throw new Error("Missing modelId or input");
+        if (!model) {
+            return new Response(
+                JSON.stringify({ error: 'Model endpoint is required' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
         }
 
-        const modelConfig = HF_MODELS[modelId];
-        if (!modelConfig) {
-            throw new Error(`Unknown model: ${modelId}`);
+        // Get HuggingFace API key from request header
+        const authHeader = req.headers.get('Authorization');
+        if (!authHeader) {
+            return new Response(
+                JSON.stringify({ error: 'Authorization header required' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
         }
 
-        // Get HF token from environment (set in Supabase Dashboard)
-        const hfToken = Deno.env.get("HUGGING_FACE_ACCESS_TOKEN");
-        if (!hfToken) {
-            throw new Error("HuggingFace API token not configured");
-        }
+        console.log('Received auth header:', authHeader.substring(0, 20) + '...');
+        console.log('Model:', model);
 
-        const response = await fetch(
-            `https://api-inference.huggingface.co/models/${modelConfig.endpoint}`,
+        // Forward request to HuggingFace with the same Authorization header
+        const hfUrl = `https://api-inference.huggingface.co/models/${model}`;
+        const hfResponse = await fetch(hfUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                inputs,
+                parameters,
+                options
+            }),
+        });
+
+        console.log('HF Response status:', hfResponse.status);
+
+        const data = await hfResponse.json();
+        console.log('HF Response data:', JSON.stringify(data).substring(0, 200));
+
+        return new Response(
+            JSON.stringify(data),
             {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${hfToken}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    inputs: input,
-                    parameters: {
-                        max_new_tokens: 512,
-                        return_full_text: false,
-                        temperature: 0.7,
-                        top_p: 0.9,
-                    },
-                    options: {
-                        wait_for_model: true,
-                        use_cache: false
-                    }
-                }),
+                status: hfResponse.status,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             }
         );
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            return new Response(JSON.stringify({
-                error: `HF API Error (${response.status}): ${errorText}`
-            }), {
-                status: response.status,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-
-        const result = await response.json();
-
-        return new Response(JSON.stringify(result), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-
     } catch (error) {
-        return new Response(JSON.stringify({
-            error: error.message
-        }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        console.error('Edge Function Error:', error);
+        return new Response(
+            JSON.stringify({ error: error.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
     }
 });
