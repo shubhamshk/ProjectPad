@@ -17,6 +17,12 @@ const ProtectedRoute = () => {
 };
 
 const App: React.FC = () => {
+  const checkSession = useStore((state) => state.checkSession);
+
+  React.useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
   return (
     <HashRouter>
       <Routes>

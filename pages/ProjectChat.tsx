@@ -50,7 +50,7 @@ const MarkdownComponents = {
 
 export const ProjectChat: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { projects, setCurrentProject, chatSessions, addMessage, updateLastMessage, setSessionModel } = useStore();
+  const { projects, setCurrentProject, chatSessions, addMessage, updateLastMessage, setSessionModel, apiKeys, setApiKey, saveMessage } = useStore();
 
   // UI State
   const [input, setInput] = useState('');
@@ -58,6 +58,11 @@ export const ProjectChat: React.FC = () => {
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // API Key Enforcement State
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [missingProvider, setMissingProvider] = useState<keyof typeof apiKeys | null>(null);
+  const [tempKey, setTempKey] = useState('');
 
   // Meta Chat State
   const [isMetaOpen, setIsMetaOpen] = useState(false);
@@ -100,8 +105,23 @@ export const ProjectChat: React.FC = () => {
 
   // --- Handlers ---
 
+  const getProviderForModel = (modelId: AIModelId): keyof typeof apiKeys => {
+    if (modelId.startsWith('gemini')) return 'gemini';
+    if (modelId.startsWith('gpt')) return 'openai';
+    if (modelId.startsWith('perplexity')) return 'perplexity';
+    return 'huggingface'; // mistral, qwen, llama, deepseek
+  };
+
   const handleSend = async () => {
     if (!input.trim() || !id) return;
+
+    // Check API Key
+    const provider = getProviderForModel(selectedModel);
+    if (!apiKeys[provider]) {
+      setMissingProvider(provider);
+      setShowApiKeyModal(true);
+      return;
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -140,6 +160,8 @@ export const ProjectChat: React.FC = () => {
           }
         }
       );
+      // Save the final message to DB
+      await saveMessage(id, aiMsgId);
     } catch (error) {
       console.error("Chat Error", error);
       updateLastMessage(id, `Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -148,8 +170,25 @@ export const ProjectChat: React.FC = () => {
     }
   };
 
+  const handleSaveApiKey = () => {
+    if (missingProvider && tempKey) {
+      setApiKey(missingProvider, tempKey);
+      setShowApiKeyModal(false);
+      setTempKey('');
+      // Optionally auto-send message here, but user might want to review
+    }
+  };
+
   const handleMetaAnalysis = async (customQuery?: string) => {
     if (!id || !session) return;
+
+    // Meta brain uses Gemini
+    if (!apiKeys.gemini) {
+      setMissingProvider('gemini');
+      setShowApiKeyModal(true);
+      return;
+    }
+
     setIsMetaThinking(true);
     setMetaResponse(null);
 
@@ -561,6 +600,65 @@ export const ProjectChat: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* API Key Modal */}
+      <AnimatePresence>
+        {showApiKeyModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowApiKeyModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-[#111] border border-white/10 rounded-2xl shadow-2xl p-6 overflow-hidden"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
+                    <Key size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">API Key Required</h3>
+                    <p className="text-xs text-gray-400">Enter your {missingProvider} key to continue</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowApiKeyModal(false)} className="text-gray-500 hover:text-white">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-sm text-gray-300">
+                  You need to provide a valid API key for <strong>{missingProvider?.toUpperCase()}</strong> to use this model.
+                  The key will be stored securely in your browser.
+                </p>
+
+                <input
+                  type="password"
+                  value={tempKey}
+                  onChange={(e) => setTempKey(e.target.value)}
+                  placeholder={`Enter ${missingProvider} API Key...`}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none transition-colors font-mono text-sm"
+                />
+
+                <button
+                  onClick={handleSaveApiKey}
+                  disabled={!tempKey}
+                  className="w-full py-3 rounded-lg bg-white text-black font-bold hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Save & Continue
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

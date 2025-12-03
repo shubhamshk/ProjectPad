@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { generateProjectIdeas } from '../services/geminiService';
 
 export const Dashboard: React.FC = () => {
-  const { projects, user, addProject } = useStore();
+  const { projects, user, createProject } = useStore();
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState(false);
   const [topic, setTopic] = useState('');
@@ -19,7 +19,7 @@ export const Dashboard: React.FC = () => {
     try {
       const jsonStr = await generateProjectIdeas(topic);
       const ideas = JSON.parse(jsonStr);
-      
+
       let description = "AI Generated Project";
       let tags = ['AI Generated'];
 
@@ -29,29 +29,23 @@ export const Dashboard: React.FC = () => {
       }
 
       const newProject = {
-        id: `p-${Date.now()}`,
         title: topic, // Explicitly use user input as the title
         description: description,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
         tags: tags,
         status: 'active' as const
       };
-      addProject(newProject);
+      await createProject(newProject);
       setTopic('');
     } catch (e) {
       console.error(e);
       // Fallback if AI fails, still respect the user's title
       const newProject = {
-        id: `p-${Date.now()}`,
         title: topic,
         description: "New project workspace.",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
         tags: ['New'],
         status: 'active' as const
       };
-      addProject(newProject);
+      await createProject(newProject);
       setTopic('');
     } finally {
       setIsGenerating(false);
@@ -67,9 +61,9 @@ export const Dashboard: React.FC = () => {
           </h1>
           <p className="text-gray-400">You have {projects.length} active projects.</p>
         </div>
-        
+
         <div className="flex gap-3">
-          <button 
+          <button
             className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium text-white transition-colors"
           >
             Import
@@ -84,7 +78,7 @@ export const Dashboard: React.FC = () => {
       <section className="mb-12">
         <GlassCard className="relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-32 bg-purple-600/20 blur-[100px] rounded-full pointer-events-none" />
-          
+
           <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center">
             <div className="flex-1">
               <div className="flex items-center gap-2 text-purple-400 mb-2">
@@ -94,16 +88,16 @@ export const Dashboard: React.FC = () => {
               <h3 className="text-xl font-bold text-white mb-2">Create a new project</h3>
               <p className="text-gray-400 text-sm">Enter a name for your project, and we'll generate the initial context and structure.</p>
             </div>
-            
+
             <div className="flex-1 w-full flex gap-2">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="Project Name (e.g. Fitness Tracker)"
                 className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
               />
-              <button 
+              <button
                 onClick={handleQuickGen}
                 disabled={isGenerating || !topic}
                 className="bg-white text-black font-semibold px-6 py-3 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -124,12 +118,12 @@ export const Dashboard: React.FC = () => {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-white">Recent Projects</h2>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.map((project) => (
-            <GlassCard 
-              key={project.id} 
-              hoverEffect={true} 
+            <GlassCard
+              key={project.id}
+              hoverEffect={true}
               onClick={() => navigate(`/project/${project.id}`)}
               className="cursor-pointer group h-full flex flex-col"
             >
@@ -141,14 +135,14 @@ export const Dashboard: React.FC = () => {
                   {project.status.toUpperCase()}
                 </span>
               </div>
-              
+
               <h3 className="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">
                 {project.title}
               </h3>
               <p className="text-sm text-gray-500 line-clamp-2 mb-4 flex-1">
                 {project.description}
               </p>
-              
+
               <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-auto">
                 <div className="flex items-center gap-2 text-xs text-gray-600">
                   <Clock size={12} />
@@ -160,7 +154,7 @@ export const Dashboard: React.FC = () => {
               </div>
             </GlassCard>
           ))}
-          
+
           <button onClick={() => setTopic('New Project')} className="border border-dashed border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center text-gray-500 hover:text-white hover:border-purple-500/50 hover:bg-purple-500/5 transition-all group h-full min-h-[200px]">
             <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
               <Plus size={24} />

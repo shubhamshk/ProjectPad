@@ -9,12 +9,37 @@ import { AppRoute } from '../types';
 
 export const Settings: React.FC = () => {
   const navigate = useNavigate();
-  const { user, apiKeys, setApiKey } = useStore();
+  const { user, apiKeys, setApiKey, updateProfile } = useStore();
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [activeHelp, setActiveHelp] = useState<'gemini' | 'openai' | 'perplexity' | 'huggingface' | null>(null);
 
+  // Profile Edit State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editAvatar, setEditAvatar] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
   const toggleShow = (key: string) => {
     setShowKeys(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleEditClick = () => {
+    setEditName(user?.name || '');
+    setEditAvatar(user?.avatar_url || '');
+    setIsEditing(true);
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      await updateProfile(editName, editAvatar);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      alert('Failed to update profile');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -36,11 +61,16 @@ export const Settings: React.FC = () => {
                 </span>
               </div>
             </div>
-            <button className="px-4 py-2 rounded-lg border border-white/10 text-sm text-white hover:bg-white/5">
+            <button
+              onClick={handleEditClick}
+              className="px-4 py-2 rounded-lg border border-white/10 text-sm text-white hover:bg-white/5 transition-colors"
+            >
               Edit Profile
             </button>
           </div>
         </GlassCard>
+
+        {/* ... existing sections ... */}
 
         <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mt-4">AI Model Configuration</h2>
 
@@ -60,7 +90,7 @@ export const Settings: React.FC = () => {
               value={apiKeys.gemini || ''}
               isVisible={!!showKeys['gemini']}
               onToggle={() => toggleShow('gemini')}
-              onChange={(val) => setApiKey('gemini', val)}
+              onChange={(val: string) => setApiKey('gemini', val)}
               onHelp={() => setActiveHelp('gemini')}
               desc="Required for Gemini Flash, Pro, and Meta-Brain features."
             />
@@ -73,7 +103,7 @@ export const Settings: React.FC = () => {
               value={apiKeys.openai || ''}
               isVisible={!!showKeys['openai']}
               onToggle={() => toggleShow('openai')}
-              onChange={(val) => setApiKey('openai', val)}
+              onChange={(val: string) => setApiKey('openai', val)}
               onHelp={() => setActiveHelp('openai')}
               desc="Required for GPT-4o chat."
             />
@@ -86,7 +116,7 @@ export const Settings: React.FC = () => {
               value={apiKeys.perplexity || ''}
               isVisible={!!showKeys['perplexity']}
               onToggle={() => toggleShow('perplexity')}
-              onChange={(val) => setApiKey('perplexity', val)}
+              onChange={(val: string) => setApiKey('perplexity', val)}
               onHelp={() => setActiveHelp('perplexity')}
               desc="Required for Deep Research and Perplexity Sonar."
             />
@@ -104,7 +134,7 @@ export const Settings: React.FC = () => {
               value={apiKeys.huggingface || ''}
               isVisible={!!showKeys['huggingface']}
               onToggle={() => toggleShow('huggingface')}
-              onChange={(val) => setApiKey('huggingface', val)}
+              onChange={(val: string) => setApiKey('huggingface', val)}
               onHelp={() => setActiveHelp('huggingface')}
               desc="Required for free models: Mistral 7B, Qwen, Llama 3.1, DeepSeek R1."
               badge="FREE"
@@ -133,6 +163,70 @@ export const Settings: React.FC = () => {
           </button>
         </GlassCard>
       </div>
+
+      {/* Edit Profile Modal */}
+      <AnimatePresence>
+        {isEditing && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsEditing(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-[#111] border border-white/10 rounded-2xl shadow-2xl p-6 overflow-hidden"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white">Edit Profile</h3>
+                <button onClick={() => setIsEditing(false)} className="text-gray-500 hover:text-white">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Display Name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-purple-500 focus:outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Avatar URL</label>
+                  <input
+                    type="text"
+                    value={editAvatar}
+                    onChange={(e) => setEditAvatar(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-purple-500 focus:outline-none transition-colors"
+                  />
+                </div>
+                <div className="pt-4 flex gap-3">
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="flex-1 px-4 py-2.5 rounded-lg border border-white/10 text-white hover:bg-white/5 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={isSaving}
+                    className="flex-1 px-4 py-2.5 rounded-lg bg-white text-black font-bold hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  >
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Help Modal */}
       <AnimatePresence>
