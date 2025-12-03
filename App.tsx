@@ -9,6 +9,7 @@ import { Auth } from './pages/Auth';
 import TermsOfService from './pages/TermsOfService';
 import { useStore } from './store';
 import { AppRoute } from './types';
+import { supabase } from './services/supabase';
 
 // Protected Route Wrapper
 const ProtectedRoute = () => {
@@ -21,6 +22,14 @@ const App: React.FC = () => {
 
   React.useEffect(() => {
     checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        checkSession();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [checkSession]);
 
   return (
@@ -38,6 +47,9 @@ const App: React.FC = () => {
             <Route path={AppRoute.BILLING} element={<Billing />} />
           </Route>
         </Route>
+
+        {/* Catch-all route for OAuth redirects (e.g. /access_token=...) */}
+        <Route path="*" element={<Auth />} />
       </Routes>
     </HashRouter>
   );
