@@ -54,7 +54,8 @@ export enum AppRoute {
   SETTINGS = '/settings',
   BILLING = '/billing',
   PROFILE = '/profile',
-  TERMS_OF_SERVICE = '/terms-of-service'
+  TERMS_OF_SERVICE = '/terms-of-service',
+  IMPORTED = '/imported/:id'
 }
 
 export interface AIModelConfig {
@@ -68,4 +69,25 @@ export interface ApiKeys {
   openai?: string;
   perplexity?: string;
   huggingface?: string;
+}
+
+export interface ImportedChat {
+  id: string;
+  user_id: string;
+  provider: 'chatgpt' | 'gemini' | 'other';
+  source_url: string;
+  title: string;
+  summary_short?: string;
+  summary_long?: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+}
+
+export interface ImportedMessage {
+  id: string;
+  imported_chat_id: string;
+  role: 'user' | 'model' | 'system';
+  content: string;
+  original_index: number;
+  created_at: string;
 }

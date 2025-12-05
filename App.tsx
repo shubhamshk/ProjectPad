@@ -7,6 +7,7 @@ import { Settings } from './pages/Settings';
 import { Billing } from './pages/Billing';
 import { Auth } from './pages/Auth';
 import TermsOfService from './pages/TermsOfService';
+import { ImportedThreadView } from './pages/ImportedThreadView';
 import { useStore } from './store';
 import { AppRoute } from './types';
 import { supabase } from './services/supabase';
@@ -45,6 +46,7 @@ const App: React.FC = () => {
             <Route path="/project/:id" element={<ProjectChat />} />
             <Route path={AppRoute.SETTINGS} element={<Settings />} />
             <Route path={AppRoute.BILLING} element={<Billing />} />
+            <Route path={AppRoute.IMPORTED} element={<ImportedThreadView />} />
           </Route>
         </Route>
 

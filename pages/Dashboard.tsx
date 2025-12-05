@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, ArrowRight, Sparkles, Clock } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
+import { ImportChatModal } from '../components/ImportChatModal';
 import { useStore } from '../store';
 import { useNavigate } from 'react-router-dom';
 import { generateProjectIdeas } from '../services/geminiService';
@@ -13,6 +14,7 @@ export const Dashboard: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [topic, setTopic] = useState('');
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const isLimitReached = user?.plan === 'free' && (
     (user?.project_count || 0) >= 3 ||
@@ -74,6 +76,7 @@ export const Dashboard: React.FC = () => {
 
         <div className="flex gap-3">
           <button
+            onClick={() => setShowImportModal(true)}
             className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium text-white transition-colors"
           >
             Import
@@ -221,6 +224,8 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
       </section>
-    </div>
+
+      <ImportChatModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} />
+    </div >
   );
 };
