@@ -18,6 +18,15 @@ export const Auth: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  React.useEffect(() => {
+    // Check for OAuth redirect hash
+    if (window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('error='))) {
+      setLoading(true);
+      // Allow Supabase to detect the session from the URL
+      // onAuthStateChange in App.tsx will eventually trigger the redirect
+    }
+  }, []);
+
   const handleOAuthLogin = async (provider: 'google' | 'github') => {
     setLoading(true);
     setError(null);
