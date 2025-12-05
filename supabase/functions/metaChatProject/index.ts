@@ -15,6 +15,27 @@ serve(async (req) => {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) throw new Error("Unauthorized");
 
+        // 1.5 Check Credits & Plan
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+        if (profileError || !profile) throw new Error("Profile not found");
+
+        if (profile.plan === 'free' && profile.credits < 25) {
+            throw new Error("Insufficient credits");
+        }
+
+        // Deduct credits
+        const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ credits: profile.credits - 25 })
+            .eq('id', user.id);
+
+        if (updateError) throw new Error("Failed to deduct credits");
+
         // 2. Parse Body
         const { projectId, messages } = await req.json();
         if (!projectId || !messages || !Array.isArray(messages)) throw new Error("Missing projectId or messages array");
@@ -53,7 +74,7 @@ serve(async (req) => {
         if (!hfToken) throw new Error("HF Token missing");
 
         const response = await fetch(
-            "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
+            "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2",
             {
                 method: "POST",
                 headers: {

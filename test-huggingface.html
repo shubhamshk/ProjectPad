@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test HuggingFace API</title>
+</head>
+
+<body>
+    <h1>HuggingFace API Test</h1>
+    <p>This page tests the Edge Function directly without any caching.</p>
+
+    <div>
+        <label>HuggingFace API Key:</label>
+        <input type="text" id="apiKey" placeholder="hf_..." style="width: 400px">
+    </div>
+
+    <div style="margin-top: 10px;">
+        <label>Message:</label>
+        <input type="text" id="message" value="Hello, how are you?" style="width: 400px">
+    </div>
+
+    <button onclick="testAPI()" style="margin-top: 10px;">Test API</button>
+
+    <div id="result"
+        style="margin-top: 20px; padding: 10px; border: 1px solid #ccc; min-height: 100px; white-space: pre-wrap;">
+    </div>
+
+    <script>
+        async function testAPI() {
+            const apiKey = document.getElementById('apiKey').value;
+            const message = document.getElementById('message').value;
+            const resultDiv = document.getElementById('result');
+
+            if (!apiKey) {
+                resultDiv.textContent = 'Please enter your HuggingFace API key';
+                return;
+            }
+
+            resultDiv.textContent = 'Testing...';
+
+            try {
+                const response = await fetch('http://localhost:54321/functions/v1/invoke-chat-charge', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+                    },
+                    body: JSON.stringify({
+                        messages: [{ role: 'user', content: message }],
+                        modelId: 'mistral-7b',
+                        projectId: 'test',
+                        apiKey: apiKey
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.textContent = 'SUCCESS!\n\n' + JSON.stringify(data, null, 2);
+                } else {
+                    resultDiv.textContent = 'ERROR:\n\n' + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                resultDiv.textContent = 'FETCH ERROR:\n\n' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

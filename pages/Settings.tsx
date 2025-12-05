@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GlassCard } from '../components/ui/GlassCard';
-import { User, Shield, Key, Bell, Check, Eye, EyeOff, HelpCircle, X, ExternalLink, Zap, FileText } from 'lucide-react';
+import { User, Shield, Key, Bell, Check, Eye, EyeOff, HelpCircle, X, ExternalLink, Zap, FileText, Loader } from 'lucide-react';
 import { useStore } from '../store';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AppRoute } from '../types';
+import { supabase } from '../services/supabase';
 
 export const Settings: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +19,67 @@ export const Settings: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // HuggingFace secure key state
+  const [hfKeyInput, setHfKeyInput] = useState('');
+  const [hfKeyValid, setHfKeyValid] = useState<boolean | null>(null);
+  const [isSavingHfKey, setIsSavingHfKey] = useState(false);
+  const [hfKeyMessage, setHfKeyMessage] = useState('');
+
+  // Fetch HF key validation status on mount
+  useEffect(() => {
+    const fetchHfKeyStatus = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('hf_key_enc, hf_key_valid')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile?.hf_key_enc) {
+          setHfKeyValid(profile.hf_key_valid ?? false);
+          setHfKeyInput('••••••••'); // Show placeholder for existing key
+        }
+      }
+    };
+    fetchHfKeyStatus();
+  }, []);
+
+  const handleSaveHfKey = async () => {
+    if (!hfKeyInput || hfKeyInput === '••••••••') return;
+
+    setIsSavingHfKey(true);
+    setHfKeyMessage('');
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/save-hf-key`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ key: hfKeyInput })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save key');
+      }
+
+      setHfKeyMessage('Key saved securely! It will be validated on first use.');
+      setHfKeyValid(false); // Will be validated on first use
+      setHfKeyInput('••••••••');
+    } catch (error: any) {
+      setHfKeyMessage(`Error: ${error.message}`);
+    } finally {
+      setIsSavingHfKey(false);
+    }
+  };
 
   const toggleShow = (key: string) => {
     setShowKeys(prev => ({ ...prev, [key]: !prev[key] }));
@@ -80,7 +142,7 @@ export const Settings: React.FC = () => {
             <h3 className="font-semibold">Provider API Keys</h3>
           </div>
           <p className="text-sm text-gray-400 mb-6">
-            Manage your API keys to access different models. Keys are stored securely in your browser's local storage.
+            Manage your API keys to access different models.
           </p>
 
           <div className="space-y-8">
@@ -123,22 +185,69 @@ export const Settings: React.FC = () => {
 
             <div className="h-px bg-white/5" />
 
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-[11px] px-2 py-1 rounded bg-green-500/20 text-green-400 font-bold">FREE</span>
-              <span className="text-xs text-gray-400">No payment required</span>
-            </div>
+            {/* HuggingFace Secure Key Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-[11px] px-2 py-1 rounded bg-green-500/20 text-green-400 font-bold">FREE</span>
+                <span className="text-[11px] px-2 py-1 rounded bg-purple-500/20 text-purple-400 font-bold">ENCRYPTED</span>
+              </div>
 
-            <ApiKeyInput
-              label="HuggingFace API Key"
-              placeholder="hf_..."
-              value={apiKeys.huggingface || ''}
-              isVisible={!!showKeys['huggingface']}
-              onToggle={() => toggleShow('huggingface')}
-              onChange={(val: string) => setApiKey('huggingface', val)}
-              onHelp={() => setActiveHelp('huggingface')}
-              desc="Required for free models: Mistral 7B, Qwen, Llama 3.1, DeepSeek R1."
-              badge="FREE"
-            />
+              <div className="flex justify-between items-end mb-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-bold text-gray-200">HuggingFace API Key</label>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-bold">FREE</span>
+                </div>
+                {hfKeyValid !== null && (
+                  <span className={`text-[10px] flex items-center gap-1 ${hfKeyValid ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {hfKeyValid ? <><Check size={10} /> Validated</> : <><Shield size={10} /> Pending validation</>}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showKeys['huggingface'] ? "text" : "password"}
+                    value={hfKeyInput}
+                    onChange={(e) => setHfKeyInput(e.target.value)}
+                    placeholder="hf_..."
+                    className="w-full bg-black/40 border border-white/10 rounded-lg pl-3 pr-10 py-3 text-white text-sm font-mono focus:border-purple-500/50 focus:outline-none transition-all"
+                  />
+                  <button
+                    onClick={() => toggleShow('huggingface')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                  >
+                    {showKeys['huggingface'] ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <button
+                  onClick={handleSaveHfKey}
+                  disabled={isSavingHfKey || !hfKeyInput || hfKeyInput === '••••••••'}
+                  className="px-4 py-2.5 rounded-lg bg-purple-600 text-white font-bold hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isSavingHfKey ? <Loader size={14} className="animate-spin" /> : <Shield size={14} />}
+                  Save Securely
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-[11px] text-gray-500">
+                  Key is encrypted server-side. Required for: Mistral 7B, Qwen, Llama 3.1, DeepSeek R1.
+                </p>
+                <button
+                  onClick={() => setActiveHelp('huggingface')}
+                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
+                >
+                  <HelpCircle size={12} /> How to get key?
+                </button>
+              </div>
+
+              {hfKeyMessage && (
+                <p className={`text-[11px] mt-2 ${hfKeyMessage.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
+                  {hfKeyMessage}
+                </p>
+              )}
+            </div>
           </div>
         </GlassCard>
 

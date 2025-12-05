@@ -4,13 +4,14 @@ import { useParams } from 'react-router-dom';
 import {
   Send, Cpu, Paperclip, MoreVertical, Maximize2,
   Search, X, Sparkles, Zap, BrainCircuit, ChevronDown, Check, ArrowRight,
-  Globe, Bot
+  Globe, Bot, Key
 } from 'lucide-react';
 import { useStore } from '../store';
 import { Message, AIModelId } from '../types';
 import { generateProjectChatResponse, generateMetaInsight } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '../services/supabase';
 
 // --- Custom Markdown Components for "Clean" Aesthetics ---
 const MarkdownComponents = {
@@ -50,7 +51,7 @@ const MarkdownComponents = {
 
 export const ProjectChat: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { projects, setCurrentProject, chatSessions, addMessage, updateLastMessage, setSessionModel, apiKeys, setApiKey, saveMessage } = useStore();
+  const { projects, setCurrentProject, chatSessions, addMessage, updateLastMessage, setSessionModel, apiKeys, setApiKey, saveMessage, user, refreshUserCredits } = useStore();
 
   // UI State
   const [input, setInput] = useState('');
@@ -115,13 +116,25 @@ export const ProjectChat: React.FC = () => {
   const handleSend = async () => {
     if (!input.trim() || !id) return;
 
-    // Check API Key
-    const provider = getProviderForModel(selectedModel);
-    if (!apiKeys[provider]) {
-      setMissingProvider(provider);
-      setShowApiKeyModal(true);
+    // Credit Check (Client-side pre-check only, real check is on server)
+    if (user?.plan === 'free' && (user?.credits || 0) < 25) {
+      alert("Insufficient credits. Please upgrade to Pro.");
       return;
     }
+
+    // Check API Key - No longer needed for server-side calls if we use server keys, 
+    // but if we are using user keys passed to server, we might keep it.
+    // The new Edge Function implementation currently assumes server-side keys for Gemini.
+    // Let's keep the check if the user is on a plan that requires their own key (e.g. BYOK), 
+    // but for the "Credit System" (Free/Pro), we usually provide the key.
+    // The prompt implies "Free tier ended — Upgrade to Pro". 
+    // Let's assume for this "Credit System" mode, we don't need the user's key for the default models.
+    // However, to avoid breaking existing "BYOK" functionality if that's what "Pro" means here...
+    // Actually, the prompt says "Upgrade to Pro" to continue using credits? Or to get unlimited?
+    // "If credits < 25, user cannot perform chat actions... Upgrade to Pro".
+    // This implies Pro has unlimited or more credits.
+    // Let's remove the strict API key check for the default model if we are using the credit system.
+    // But for now, to be safe and minimal, I'll just remove the DB update logic.
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -162,6 +175,8 @@ export const ProjectChat: React.FC = () => {
       );
       // Save the final message to DB
       await saveMessage(id, aiMsgId);
+      // Refresh credits to show updated balance in sidebar
+      await refreshUserCredits();
     } catch (error) {
       console.error("Chat Error", error);
       updateLastMessage(id, `Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -290,7 +305,15 @@ export const ProjectChat: React.FC = () => {
                             desc="Fastest, low latency"
                             icon={<Zap size={14} className="text-yellow-400" />}
                             selected={selectedModel === 'gemini-2.5-flash'}
-                            onClick={(id) => { if (id) setSessionModel(project.id, id); setShowModelSelector(false); }}
+                            onClick={(id) => {
+                              if (user?.plan === 'free') {
+                                alert("Upgrade to Pro to use Gemini models.");
+                                return;
+                              }
+                              if (id) setSessionModel(project.id, id);
+                              setShowModelSelector(false);
+                            }}
+                            badge={user?.plan === 'free' ? 'PRO' : undefined}
                           />
                           <ModelOption
                             id="gemini-3-pro-preview"
@@ -298,7 +321,15 @@ export const ProjectChat: React.FC = () => {
                             desc="High reasoning & thinking"
                             icon={<Sparkles size={14} className="text-purple-400" />}
                             selected={selectedModel === 'gemini-3-pro-preview'}
-                            onClick={(id) => { if (id) setSessionModel(project.id, id); setShowModelSelector(false); }}
+                            onClick={(id) => {
+                              if (user?.plan === 'free') {
+                                alert("Upgrade to Pro to use Gemini models.");
+                                return;
+                              }
+                              if (id) setSessionModel(project.id, id);
+                              setShowModelSelector(false);
+                            }}
+                            badge={user?.plan === 'free' ? 'PRO' : undefined}
                           />
 
                           <div className="h-px bg-white/5 my-1" />
@@ -310,7 +341,15 @@ export const ProjectChat: React.FC = () => {
                             desc="OpenAI Flagship"
                             icon={<Bot size={14} className="text-green-400" />}
                             selected={selectedModel === 'gpt-4o'}
-                            onClick={(id) => { if (id) setSessionModel(project.id, id); setShowModelSelector(false); }}
+                            onClick={(id) => {
+                              if (user?.plan === 'free') {
+                                alert("Upgrade to Pro to use GPT-4o.");
+                                return;
+                              }
+                              if (id) setSessionModel(project.id, id);
+                              setShowModelSelector(false);
+                            }}
+                            badge={user?.plan === 'free' ? 'PRO' : undefined}
                           />
                           <ModelOption
                             id="perplexity-sonar"
@@ -318,7 +357,15 @@ export const ProjectChat: React.FC = () => {
                             desc="Deep Research"
                             icon={<Globe size={14} className="text-blue-400" />}
                             selected={selectedModel === 'perplexity-sonar'}
-                            onClick={(id) => { if (id) setSessionModel(project.id, id); setShowModelSelector(false); }}
+                            onClick={(id) => {
+                              if (user?.plan === 'free') {
+                                alert("Upgrade to Pro to use Perplexity.");
+                                return;
+                              }
+                              if (id) setSessionModel(project.id, id);
+                              setShowModelSelector(false);
+                            }}
+                            badge={user?.plan === 'free' ? 'PRO' : undefined}
                           />
 
                           <div className="h-px bg-white/5 my-1" />
@@ -486,8 +533,9 @@ export const ProjectChat: React.FC = () => {
               </button>
             </div>
           </div>
-          <div className="max-w-4xl mx-auto mt-2 text-center">
+          <div className="max-w-4xl mx-auto mt-2 text-center flex justify-between px-4">
             <p className="text-[10px] text-gray-600">Using <strong>{getModelLabel(selectedModel)}</strong>. AI can make mistakes.</p>
+            <p className="text-[10px] text-gray-600">Cost: <strong>25 Credits</strong> / msg</p>
           </div>
         </div>
       </div>

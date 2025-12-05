@@ -27,6 +27,7 @@ interface AppState {
   addMessage: (projectId: string, message: Message) => Promise<void>;
   updateLastMessage: (projectId: string, content: string) => void; // Streaming updates don't need DB save every chunk
 
+  refreshUserCredits: () => Promise<void>;
   setApiKey: (provider: keyof ApiKeys, key: string) => void;
 }
 
@@ -44,6 +45,8 @@ export const useStore = create<AppState>()(
       login: (user) => {
         set({ user, isAuthenticated: true });
         get().fetchProjects();
+        // Trigger a re-fetch to ensure we have latest profile data if passed user object is incomplete
+        get().checkSession();
       },
 
       logout: async () => {
@@ -54,12 +57,28 @@ export const useStore = create<AppState>()(
       checkSession: async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
+          // Fetch profile
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          // Fetch project count
+          const { count } = await supabase
+            .from('projects')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', session.user.id);
+
           const user: User = {
             id: session.user.id,
             email: session.user.email!,
             name: session.user.user_metadata.name || session.user.email!.split('@')[0],
-            plan: 'free',
-            avatar_url: session.user.user_metadata.avatar_url
+            plan: profile?.plan || 'free',
+            avatar_url: session.user.user_metadata.avatar_url,
+            credits: profile?.credits ?? 300,
+            monthly_project_creations: profile?.monthly_project_creations ?? 0,
+            project_count: count || 0
           };
           set({ user, isAuthenticated: true });
           get().fetchProjects();
@@ -112,7 +131,12 @@ export const useStore = create<AppState>()(
         if (error) throw error;
 
         set((state) => ({
-          projects: [data as Project, ...state.projects]
+          projects: [data as Project, ...state.projects],
+          user: state.user ? {
+            ...state.user,
+            project_count: (state.user.project_count || 0) + 1,
+            monthly_project_creations: (state.user.monthly_project_creations || 0) + 1
+          } : null
         }));
 
         // Create initial chat session
@@ -280,6 +304,23 @@ export const useStore = create<AppState>()(
             }
           };
         });
+      },
+
+      refreshUserCredits: async () => {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) return;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('credits')
+          .eq('id', authUser.id)
+          .single();
+
+        if (profile) {
+          set((state) => ({
+            user: state.user ? { ...state.user, credits: profile.credits } : null
+          }));
+        }
       },
 
       setApiKey: (provider, key) => set((state) => ({

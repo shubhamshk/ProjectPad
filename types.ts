@@ -5,6 +5,9 @@ export interface User {
   name: string;
   plan: 'free' | 'pro' | 'enterprise';
   avatar_url?: string;
+  credits: number;
+  monthly_project_creations: number;
+  project_count: number; // Computed client-side or fetched
 }
 
 export interface Project {

@@ -34,7 +34,7 @@ serve(async (req) => {
         console.log('Model:', model);
 
         // Forward request to HuggingFace with the same Authorization header
-        const hfUrl = `https://api-inference.huggingface.co/models/${model}`;
+        const hfUrl = `https://router.huggingface.co/hf-inference/models/${model}`;
         const hfResponse = await fetch(hfUrl, {
             method: 'POST',
             headers: {

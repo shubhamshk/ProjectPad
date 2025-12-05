@@ -36,7 +36,7 @@ export async function generateEmbedding(
     if (!key) throw new Error("Hugging Face Access Token not found");
 
     const response = await fetch(
-        "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
+        "https://router.huggingface.co/hf-inference/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
         {
             method: "POST",
             headers: {

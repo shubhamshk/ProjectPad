@@ -2,6 +2,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { Message, AIModelId } from '../types';
 import { useStore } from '../store';
+import { supabase } from './supabase';
 
 // Helper to get Gemini Client with dynamic key
 const getGeminiClient = () => {
@@ -16,348 +17,118 @@ const getGeminiClient = () => {
 
 // --- Unified Chat Gateway ---
 
+// --- Unified Chat Gateway ---
+
 export const generateProjectChatResponse = async (
   history: Message[],
   prompt: string,
   modelId: AIModelId,
   onChunk: (text: string) => void
 ): Promise<string> => {
-  // Route to appropriate provider
-  if (modelId.startsWith('gemini')) {
-    return generateGeminiResponse(history, prompt, modelId as 'gemini-2.5-flash' | 'gemini-3-pro-preview', onChunk);
-  } else if (modelId.startsWith('gpt')) {
-    return generateOpenAIResponse(history, prompt, onChunk);
-  } else if (modelId.startsWith('perplexity')) {
-    return generatePerplexityResponse(history, prompt, onChunk);
-  } else if (['mistral-7b', 'qwen-7b', 'qwen-14b', 'llama-3.1-8b', 'deepseek-r1'].includes(modelId)) {
-    return generateHuggingFaceResponse(history, prompt, modelId as 'mistral-7b' | 'qwen-7b' | 'qwen-14b' | 'llama-3.1-8b' | 'deepseek-r1', onChunk);
-  }
-
-  throw new Error(`Unsupported model: ${modelId}`);
-};
-
-// --- Google Gemini Implementation ---
-
-const generateGeminiResponse = async (
-  history: Message[],
-  prompt: string,
-  modelId: 'gemini-2.5-flash' | 'gemini-3-pro-preview',
-  onChunk: (text: string) => void
-) => {
   try {
-    const ai = getGeminiClient();
-    const chat = ai.chats.create({
-      model: modelId,
-      config: {
-        systemInstruction: "You are an expert project manager and coding assistant named ProjectPad. Be concise, technical, and helpful. Use Markdown for formatting.",
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("Unauthorized");
+
+    // Determine which API key to use based on model
+    const apiKeys = useStore.getState().apiKeys;
+    let apiKey: string | undefined;
+
+    if (modelId.startsWith('gemini')) {
+      apiKey = apiKeys.gemini;
+    } else if (modelId.startsWith('gpt')) {
+      apiKey = apiKeys.openai;
+    } else if (modelId.startsWith('perplexity')) {
+      apiKey = apiKeys.perplexity;
+    } else {
+      // HuggingFace models (mistral, qwen, llama, deepseek)
+      apiKey = apiKeys.huggingface;
+    }
+
+    // Call the secure Edge Function
+    const response = await fetch(`${(import.meta as any).env.VITE_SUPABASE_URL}/functions/v1/invoke-chat-charge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
       },
-      history: history
-        .filter(h => h.role !== 'system')
-        .map(h => ({
-          role: h.role,
-          parts: [{ text: h.content }]
-        }))
+      body: JSON.stringify({
+        messages: [...history, { role: 'user', content: prompt }],
+        modelId,
+        projectId: 'current-project',
+        apiKey // Pass the user's API key for the selected model
+      })
     });
 
-    const result = await chat.sendMessageStream({ message: prompt });
-
-    let fullText = '';
-    for await (const chunk of result) {
-      const text = chunk.text;
-      if (text) {
-        fullText += text;
-        onChunk(fullText);
-      }
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to generate response');
     }
-    return fullText;
+
+    const data = await response.json();
+
+    // Handle the response
+    // Note: The Edge Function currently returns the full text at once (no streaming yet for simplicity)
+    if (data.result) {
+      onChunk(data.result);
+      return data.result;
+    }
+
+    return "";
+
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    const msg = `Error connecting to Gemini: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error("Chat Error:", error);
+    const msg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
     onChunk(msg);
     throw error;
   }
 };
 
-// --- OpenAI Implementation (Client-side Fetch) ---
+// ... (Keep other exports like generateMetaInsight if they are still needed or refactor them too)
+// For now, we'll keep generateMetaInsight as is, assuming it might be used separately or needs similar refactoring later.
+// But we should comment out or remove the old client-side implementations to avoid confusion/bloat if they are strictly replaced.
 
-const generateOpenAIResponse = async (
+export const generateMetaInsight = async (
   history: Message[],
-  prompt: string,
-  onChunk: (text: string) => void
-) => {
-  const apiKey = useStore.getState().apiKeys.openai;
-  if (!apiKey) {
-    const msg = "⚠️ OpenAI API Key missing. Please add it in Settings.";
-    onChunk(msg);
-    return msg;
-  }
-
+  query: string
+): Promise<string> => {
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: "You are ProjectPad, an expert technical assistant." },
-          ...history.map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })),
-          { role: 'user', content: prompt }
-        ],
-        stream: true
-      })
+    const ai = getGeminiClient();
+
+    // Build context from chat history
+    const conversationContext = history
+      .map(msg => `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`)
+      .join('\n\n');
+
+    const prompt = `You are analyzing a project conversation. Here's the full chat history:
+
+${conversationContext}
+
+Based on this conversation, answer the following question:
+${query}
+
+Provide a comprehensive, well-structured analysis.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      const errorMessage = errorData?.error?.message || response.statusText;
-
-      if (response.status === 429) {
-        const msg = `🚫 **OpenAI Rate Limit Exceeded**\n\nYou've hit OpenAI's rate limit. This usually means:\n- Free tier quota exhausted\n- No credits/payment method on account\n- Too many requests\n\n**Solutions:**\n1. Wait a few minutes and try again\n2. Add credits to your OpenAI account at platform.openai.com/account/billing\n3. Switch to Gemini model (select from dropdown) - it's free!\n\n*Tip: Use Gemini 2.5 Flash for faster & free responses*`;
-        onChunk(msg);
-        throw new Error(msg);
-      } else if (response.status === 401) {
-        const msg = `🔑 **Invalid OpenAI API Key**\n\nYour API key appears to be invalid or revoked.\n\n**To fix:**\n1. Go to platform.openai.com/api-keys\n2. Create a new API key\n3. Update it in Settings\n\nOr switch to Gemini (free) from the model dropdown!`;
-        onChunk(msg);
-        throw new Error(msg);
-      } else if (response.status === 402) {
-        const msg = `💳 **OpenAI Payment Required**\n\nYour OpenAI account needs credits.\n\n**To fix:**\n1. Visit platform.openai.com/account/billing\n2. Add a payment method and credits\n\nOr use Gemini models (free)!`;
-        onChunk(msg);
-        throw new Error(msg);
-      }
-
-      throw new Error(`OpenAI Error (${response.status}): ${errorMessage}`);
-    }
-    if (!response.body) throw new Error('No response body');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.trim() === '') continue;
-        if (line.trim() === 'data: [DONE]') continue;
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            const content = data.choices[0]?.delta?.content;
-            if (content) {
-              fullText += content;
-              onChunk(fullText);
-            }
-          } catch (e) {
-            console.error('Error parsing stream', e);
-          }
-        }
+    // Handle different SDK response structures
+    if (response.text) {
+      return response.text || "Unable to generate insight.";
+    } else if (response.candidates && response.candidates.length > 0) {
+      const part = response.candidates[0].content?.parts?.[0];
+      if (part && 'text' in part) {
+        return part.text || "Unable to generate insight.";
       }
     }
-    return fullText;
 
+    return "Unable to generate insight.";
   } catch (error) {
-    console.error("OpenAI Error:", error);
-    const msg = `Error connecting to OpenAI: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    onChunk(msg);
-    return msg;
+    console.error("Meta-Insight Error:", error);
+    throw new Error(`Failed to generate insight: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
-
-// --- Perplexity Implementation ---
-
-const generatePerplexityResponse = async (
-  history: Message[],
-  prompt: string,
-  onChunk: (text: string) => void
-) => {
-  const apiKey = useStore.getState().apiKeys.perplexity;
-  if (!apiKey) {
-    const msg = "⚠️ Perplexity API Key missing. Please add it in Settings.";
-    onChunk(msg);
-    return msg;
-  }
-
-  try {
-    const response = await fetch('https://api.perplexity.ai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'sonar-deep-research',
-        messages: [
-          { role: 'system', content: "Be precise and helpful." },
-          ...history.map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })),
-          { role: 'user', content: prompt }
-        ],
-        stream: true
-      })
-    });
-
-    if (!response.ok) throw new Error(`Perplexity Error: ${response.statusText}`);
-    if (!response.body) throw new Error('No response body');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.trim() === '') continue;
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            const content = data.choices[0]?.delta?.content;
-            if (content) {
-              fullText += content;
-              onChunk(fullText);
-            }
-          } catch (e) {
-            // Perplexity sometimes sends non-JSON pings
-          }
-        }
-      }
-    }
-    return fullText;
-
-  } catch (error) {
-    console.error("Perplexity Error:", error);
-    const msg = `Error connecting to Perplexity: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    onChunk(msg);
-    return msg;
-  }
-};
-
-// --- HuggingFace Free Models Implementation ---
-
-const HF_MODELS: Record<string, { endpoint: string; format: 'instruct' | 'chat' }> = {
-  'mistral-7b': { endpoint: 'mistralai/Mistral-7B-Instruct-v0.2', format: 'instruct' },
-  'qwen-7b': { endpoint: 'Qwen/Qwen2.5-7B-Instruct', format: 'chat' },
-  'qwen-14b': { endpoint: 'Qwen/Qwen2.5-14B-Instruct', format: 'chat' },
-  'llama-3.1-8b': { endpoint: 'meta-llama/Meta-Llama-3.1-8B-Instruct', format: 'chat' },
-  'deepseek-r1': { endpoint: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', format: 'chat' }
-};
-
-const generateHuggingFaceResponse = async (
-  history: Message[],
-  prompt: string,
-  modelId: 'mistral-7b' | 'qwen-7b' | 'qwen-14b' | 'llama-3.1-8b' | 'deepseek-r1',
-  onChunk: (text: string) => void
-) => {
-  const apiKey = useStore.getState().apiKeys.huggingface;
-  if (!apiKey) {
-    const msg = "🤗 HuggingFace API Key missing. Please add it in Settings to use free models.";
-    onChunk(msg);
-    return msg;
-  }
-
-  const modelConfig = HF_MODELS[modelId];
-  if (!modelConfig) {
-    const msg = `Model ${modelId} not configured.`;
-    onChunk(msg);
-    return msg;
-  }
-
-  try {
-    // Use HuggingFace Router API (OpenAI-compatible)
-    const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: `${modelConfig.endpoint}:featherless-ai`,
-        messages: [
-          { role: 'system', content: "You are ProjectPad, an expert technical assistant." },
-          ...history.slice(-5).map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })),
-          { role: 'user', content: prompt }
-        ],
-        stream: true,
-        max_tokens: 512,
-        temperature: 0.7,
-        top_p: 0.9
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      const errorMessage = errorData?.error?.message || response.statusText;
-
-      if (response.status === 503) {
-        const msg = `⏳ Model is loading... Please wait 20-30 seconds and try again.\n\nHuggingFace free models need to "wake up" on first use.`;
-        onChunk(msg);
-        throw new Error(msg);
-      } else if (response.status === 401) {
-        const msg = `🔑 Invalid HuggingFace API Key. Get one free at huggingface.co/settings/tokens`;
-        onChunk(msg);
-        throw new Error(msg);
-      }
-
-      throw new Error(`HuggingFace Error (${response.status}): ${errorMessage}`);
-    }
-
-    if (!response.body) throw new Error('No response body');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.trim() === '') continue;
-        if (line.trim() === 'data: [DONE]') continue;
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            const content = data.choices[0]?.delta?.content;
-            if (content) {
-              fullText += content;
-              onChunk(fullText);
-            }
-          } catch (e) {
-            console.error('Error parsing stream', e);
-          }
-        }
-      }
-    }
-    return fullText;
-
-  } catch (error) {
-    console.error("HuggingFace Error:", error);
-    const msg = `Error with ${modelId}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    onChunk(msg);
-    return msg;
-  }
-};
-
-// --- Meta Tools ---
 
 export const generateProjectIdeas = async (topic: string): Promise<string> => {
   try {
@@ -369,49 +140,22 @@ export const generateProjectIdeas = async (topic: string): Promise<string> => {
         responseMimeType: 'application/json'
       }
     });
-    return response.text || "[]";
+
+    // Handle different SDK response structures
+    if (response.text) {
+      return response.text || "[]";
+    } else if (response.candidates && response.candidates.length > 0) {
+      // Fallback to direct access
+      const part = response.candidates[0].content?.parts?.[0];
+      if (part && 'text' in part) {
+        return part.text || "[]";
+      }
+    }
+
+    return "[]";
   } catch (error) {
     console.error("Gemini Generation Error:", error);
     return "[]";
   }
 };
 
-export const generateMetaInsight = async (
-  history: Message[],
-  query: string
-): Promise<string> => {
-  try {
-    const ai = getGeminiClient();
-    // The Meta-Brain always uses Gemini 3 Pro for superior reasoning over the multi-model chat history
-    const model = 'gemini-3-pro-preview';
-
-    // Construct a context-heavy prompt
-    const context = history
-      .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-      .join('\n\n');
-
-    const response = await ai.models.generateContent({
-      model,
-      contents: `
-        You are the "Meta-Chatbot" for ProjectPad. Your job is to analyze the entire conversation history of a project (which may contain responses from Gemini, GPT, and Perplexity) and provide high-level insights.
-        
-        Here is the Project Conversation History:
-        ---
-        ${context}
-        ---
-        
-        User Query: ${query}
-        
-        Provide a comprehensive, intelligent answer.
-      `,
-      config: {
-        thinkingConfig: { thinkingBudget: 2048 }
-      }
-    });
-
-    return response.text || "I couldn't analyze the project at this time.";
-  } catch (error) {
-    console.error("Meta Insight Error:", error);
-    return `Error: ${error instanceof Error ? error.message : 'Failed to analyze project.'}`;
-  }
-};

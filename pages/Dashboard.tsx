@@ -12,8 +12,18 @@ export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState(false);
   const [topic, setTopic] = useState('');
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const isLimitReached = user?.plan === 'free' && (
+    (user?.project_count || 0) >= 3 ||
+    (user?.monthly_project_creations || 0) >= 3
+  );
 
   const handleQuickGen = async () => {
+    if (isLimitReached) {
+      setShowUpgrade(true);
+      return;
+    }
     if (!topic) return;
     setIsGenerating(true);
     try {
@@ -68,7 +78,11 @@ export const Dashboard: React.FC = () => {
           >
             Import
           </button>
-          <button className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium shadow-[0_0_20px_rgba(160,108,213,0.3)] transition-all flex items-center gap-2">
+          <button
+            onClick={() => isLimitReached ? setShowUpgrade(true) : setTopic('New Project')}
+            className={`px-4 py-2 rounded-lg text-white text-sm font-medium shadow-[0_0_20px_rgba(160,108,213,0.3)] transition-all flex items-center gap-2 ${isLimitReached ? 'bg-gray-600 cursor-not-allowed opacity-50' : 'bg-purple-600 hover:bg-purple-500'
+              }`}
+          >
             <Plus size={16} /> New Project
           </button>
         </div>
@@ -155,12 +169,56 @@ export const Dashboard: React.FC = () => {
             </GlassCard>
           ))}
 
-          <button onClick={() => setTopic('New Project')} className="border border-dashed border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center text-gray-500 hover:text-white hover:border-purple-500/50 hover:bg-purple-500/5 transition-all group h-full min-h-[200px]">
+          <button
+            onClick={() => isLimitReached ? setShowUpgrade(true) : setTopic('New Project')}
+            className="border border-dashed border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center text-gray-500 hover:text-white hover:border-purple-500/50 hover:bg-purple-500/5 transition-all group h-full min-h-[200px]"
+          >
             <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
               <Plus size={24} />
             </div>
             <span className="text-sm font-medium">Create New Project</span>
           </button>
+
+          {/* Upgrade Dialog */}
+          {showUpgrade && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <div className="w-full max-w-md bg-[#111] border border-white/10 rounded-2xl p-6 shadow-2xl relative">
+                <button
+                  onClick={() => setShowUpgrade(false)}
+                  className="absolute top-4 right-4 text-gray-500 hover:text-white"
+                >
+                  <Plus size={24} className="rotate-45" />
+                </button>
+
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(160,108,213,0.4)]">
+                    <Sparkles size={32} className="text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Upgrade to Pro</h2>
+                  <p className="text-gray-400">You've reached the limits of the Free plan.</p>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                  <div className="flex items-center gap-3 text-gray-300">
+                    <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">✓</div>
+                    <span>Unlimited projects</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-300">
+                    <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">✓</div>
+                    <span>Unlimited monthly creations</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-300">
+                    <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">✓</div>
+                    <span>Access to Gemini Pro & GPT-4</span>
+                  </div>
+                </div>
+
+                <button className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors">
+                  Upgrade Now
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </div>
