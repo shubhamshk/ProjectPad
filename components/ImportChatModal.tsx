@@ -33,11 +33,15 @@ export const ImportChatModal: React.FC<ImportChatModalProps> = ({ isOpen, onClos
             const provider = detectProvider(url);
             const { data: { session } } = await supabase.auth.getSession();
 
+            if (!session || !session.access_token) {
+                throw new Error('Authentication session missing. Please refresh the page.');
+            }
+
             const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/import-shared-chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
+                    'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({ url, provider })
             });
@@ -64,11 +68,15 @@ export const ImportChatModal: React.FC<ImportChatModalProps> = ({ isOpen, onClos
         try {
             const { data: { session } } = await supabase.auth.getSession();
 
+            if (!session || !session.access_token) {
+                throw new Error('Authentication session missing. New session required.');
+            }
+
             const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/import-confirm`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
+                    'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify(previewData)
             });
@@ -166,8 +174,8 @@ export const ImportChatModal: React.FC<ImportChatModalProps> = ({ isOpen, onClos
                                 {previewData.messages.map((msg, idx) => (
                                     <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user'
-                                                ? 'bg-purple-600/20 text-purple-100 rounded-tr-sm'
-                                                : 'bg-white/5 text-gray-300 rounded-tl-sm'
+                                            ? 'bg-purple-600/20 text-purple-100 rounded-tr-sm'
+                                            : 'bg-white/5 text-gray-300 rounded-tl-sm'
                                             }`}>
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
                                         </div>
