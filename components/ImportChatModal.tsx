@@ -98,8 +98,8 @@ export const ImportChatModal: React.FC<ImportChatModalProps> = ({ isOpen, onClos
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="w-full max-w-2xl bg-[#111] border border-white/10 rounded-2xl flex flex-col max-h-[90vh] shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-0 md:p-4">
+            <div className="w-full h-full md:h-auto md:max-w-2xl bg-[#111] border-0 md:border border-white/10 md:rounded-2xl flex flex-col max-h-[100dvh] md:max-h-[90vh] shadow-2xl">
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-white/5">

@@ -296,7 +296,7 @@ export const ProjectChat: React.FC = () => {
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 10 }}
-                          className="absolute top-full left-0 mt-2 w-64 bg-[#111] border border-white/10 rounded-xl shadow-2xl backdrop-blur-xl p-2 z-20 flex flex-col gap-1 ring-1 ring-white/5"
+                          className="absolute top-full left-0 mt-2 w-80 bg-[#111] border border-white/10 rounded-xl shadow-2xl backdrop-blur-xl p-2 z-50 flex flex-col gap-1 ring-1 ring-white/5 max-h-[60vh] overflow-y-auto"
                         >
                           <div className="px-3 py-2 text-[10px] font-bold text-gray-500 uppercase">Google Gemini</div>
                           <ModelOption
@@ -507,9 +507,9 @@ export const ProjectChat: React.FC = () => {
         </div>
 
         {/* Composer */}
-        <div className="p-6 border-t border-white/5 bg-[#050505]">
+        <div className="p-4 md:p-6 border-t border-white/5 bg-[#050505]">
           <div className="max-w-4xl mx-auto relative group">
-            <div className="absolute left-4 top-4 flex items-center gap-3 border-r border-white/10 pr-3">
+            <div className="absolute left-3 top-3 md:left-4 md:top-4 flex items-center gap-3 border-r border-white/10 pr-3">
               <button className="text-gray-500 hover:text-white transition-colors">
                 <Paperclip size={18} />
               </button>
@@ -520,7 +520,7 @@ export const ProjectChat: React.FC = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
               placeholder={`Ask ${getModelLabel(selectedModel)}...`}
-              className="w-full bg-[#121212] border border-white/10 rounded-xl py-4 pl-20 pr-14 text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/40 focus:ring-1 focus:ring-purple-500/40 transition-all shadow-inner text-sm"
+              className="w-full bg-[#121212] border border-white/10 rounded-xl py-3 md:py-4 pl-16 md:pl-20 pr-12 md:pr-14 text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/40 focus:ring-1 focus:ring-purple-500/40 transition-all shadow-inner text-sm"
             />
 
             <div className="absolute right-2 top-2">

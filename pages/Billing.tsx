@@ -34,28 +34,29 @@ export const Billing: React.FC = () => {
           </div>
           <div className="mb-4">
             <h3 className="text-xl font-bold text-white">Pro</h3>
-            <p className="text-2xl font-bold text-white mt-2">$29 <span className="text-sm text-gray-500 font-normal">/mo</span></p>
+            <p className="text-2xl font-bold text-white mt-2">$9 <span className="text-sm text-gray-500 font-normal">/mo</span></p>
           </div>
           <ul className="space-y-3 mb-8 flex-1">
             <Feature text="Unlimited Projects" />
             <Feature text="Gemini Pro 1.5 Access" />
             <Feature text="Priority Support" />
-            <Feature text="Video Generation (Veo)" />
+            <Feature text="Advanced Analytics" />
           </ul>
           <button className="w-full py-2 rounded-lg bg-white text-black hover:bg-gray-200 text-sm font-bold shadow-lg shadow-purple-500/20">
-            Upgrade Now
+            Upgrade to Pro
           </button>
         </GlassCard>
 
-        {/* Enterprise */}
-        <GlassCard className="flex flex-col">
+        {/* Premium Plan */}
+        <GlassCard className="flex flex-col border-amber-500/20">
           <div className="mb-4">
-            <h3 className="text-xl font-bold text-white">Enterprise</h3>
-            <p className="text-2xl font-bold text-white mt-2">Custom</p>
+            <h3 className="text-xl font-bold text-white">Premium</h3>
+            <p className="text-2xl font-bold text-white mt-2">$29 <span className="text-sm text-gray-500 font-normal">/mo</span></p>
           </div>
           <ul className="space-y-3 mb-8 flex-1">
-            <Feature text="Custom Models" />
-            <Feature text="SSO & Advanced Security" />
+            <Feature text="Everything in Pro" />
+            <Feature text="Video Generation (Veo)" />
+            <Feature text="Advanced Models (Claude/GPT-4)" />
             <Feature text="Dedicated Account Manager" />
           </ul>
           <button className="w-full py-2 rounded-lg border border-white/10 text-white hover:bg-white/5 text-sm font-medium">
